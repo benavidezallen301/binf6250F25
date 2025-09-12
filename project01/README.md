@@ -5,36 +5,43 @@ Algorithm that processes VCF file and produces a dictionary that counts diseases
 
 ```
 def parse_line(line):
-  stripped_line = strip line of whitespace and split by tabs
-  INFO = save the 7th index
+  split_line = strip line of whitespace and split by tabs
+  info = save the 7th index
 
-  split INFO by ';' and save into a list
-  use find function to search up AF_EXAC
-  if AF_EXAC < 0.0001:
-    if CLNDN is 'not_specified' or 'not_provided'
-      continue
-    else
-      create list that stores associated diseases in CLNDN
+  create and initiate CLNDN list that we will return
+
+  find position of AF_EXAC
+  if AF_EXAC position is available:
+    extract value and
+    if AF_EXAC < 0.0001:
+      find and extract CLNDN value
+      if CLNDN has '|':
+        CLNDN = CLNDN value split by '|' using .split() which returns a list
+      else:
+        append CLNDN value to CLNDN list
   
-  returns list
+  returns CLNDN list
   
 
 def read_file(file):
+  create and initiate disease count dictionary
   open file as infile
     for each line of infile
       if line starts with '#':
         continue
       else:
         CLNDN = parse_line(line)
-  counter = {}
-  for key in counter:
-    for disease in CLNDN:
-      if disease is not found in the key:
-        counter[disease] = 1
-      else
-        counter[disease] += 1
 
-  return counter
+    for each disease in CLNDN list
+      if disease is not 'not_specified' or 'not_provided':
+        if disease is in disease count dictionary:
+          add 1 to the key with the same disease
+        else
+          create key and set as 1
+      else
+        continue
+
+  return disease count dictionary
 
 read_file(filename)  
 ```
