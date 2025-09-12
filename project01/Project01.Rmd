@@ -1,0 +1,77 @@
+---
+title: "Project 01"
+author: "Allen Benavidez & Zoe Chow"
+date: "`r Sys.Date()`"
+output:
+  github_document:
+    toc: true
+    toc_depth: 2
+    html_preview: false
+--- 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+library('reticulate')
+use_python('/usr/bin/python3')
+```
+
+
+```{python}
+def parse_line(line):
+  split_line = line.strip().split('\t')  # create list for each column
+  info = split_line[7]  # extract INFO column 
+  
+  CLNDN = []  # initiate list to store disease
+  AF_EXAC_pos = info.find('AF_EXAC=')  # get AF_EXAC location
+  
+  if AF_EXAC_pos != -1:
+    # extract AF_EXAC value
+    start_pos = AF_EXAC_pos + len('AF_EXAC=')  # starting position
+    end_pos = info.find(';', start_pos)  # end position 
+    AF_EXAC_val = float(info[start_pos:end_pos])
+    
+    if AF_EXAC_val < 0.0001:
+      # extract CLNDN value
+      CLNDN_pos = info.find('CLNDN=')  # CLNDN= position
+      CLNDN_start = CLNDN_pos + len('CLNDN=')  # value starting position
+      CLNDN_end = info.find(';', CLNDN_start)  # value ending position
+      CLNDN_val = info[CLNDN_start:CLNDN_end]
+      
+      if "|" in CLNDN_val:
+        CLNDN = CLNDN_val.split('|') 
+      else:
+        CLNDN.append(CLNDN_val)
+        
+  return(CLNDN)
+      
+```
+
+```{python}
+def read_file(file):
+  # create & initiate dictionary 
+  disease_count = {}
+  
+  with open(file, "r", encoding = 'utf-8') as infile:
+    for line in infile:
+      if line.startswith('#'):
+        continue
+      else:
+        CLNDN = parse_line(line)
+      
+      # loop through list and add to dictionary
+      for disease in CLNDN:
+        if disease != 'not_specified' or 'not_provided':
+          if disease in disease_count:
+            disease_count[disease] += 1
+          else:
+            disease_count[disease] = 1
+        else:
+          continue
+        
+  return(disease_count)
+
+read_file('clinvar_20190923_short.vcf')
+
+```
+
+
