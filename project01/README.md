@@ -47,10 +47,14 @@ read_file(filename)
 ```
 
 # Successes
-Description of the team's learning points
+* Created a general outline of what we wanted each function to do
+* Good runtime
+* Learned how properly append to lists
+* Gained familiarity with VCF files
+* Properly used `.find()` function and extract data
 
 # Struggles
-Description of the stumbling blocks the team experienced
+Our main issue was having the counter count the diseases properly. Our results initially counting individual letters, 'not_specified', 'not_provided'. We created a separate code to ensure that we were correctly extracting CLNDN values, and realized that our `parse_line()` function was storing some values as strings instead because we used `=` instead of `.append`. After fixing the code, we ran into another issue where the loop in `read_file()` kept failing because the code was trying to add lists into the dictionary as keys. We realized that some lists were returned as lists of lists, causing the loop to fail. We changed the code to an  `if else` statements to fix the issue.
 
 # Personal Reflections
 ## Group Leader
@@ -60,4 +64,4 @@ Group leader's reflection on the project
 Other members' reflections on the project
 
 # Generative AI Appendix
-As per the syllabus
+[ChatGPT conversation](https://chatgpt.com/share/68c4af41-209c-800b-903e-1c02002b9cf0)
