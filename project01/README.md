@@ -61,7 +61,7 @@ Our main issue was having the counter count the diseases properly. Our results i
 Group leader's reflection on the project
 
 ## Other member
-Other members' reflections on the project
+It has been a year since I practiced Python. This project served as a good refresher, allowing me to practice not only Python syntax but also create and use dictionaries. Furthermore, when I took courses for Data Analytics and Machine Learning, although I practiced a lot of programming in R, it was not object-oriented programming. This method of programming requires more planning to decipher how to implement the different functions properly. This project also taught me how to pseudo-code. Although I am not confident in my pseudo-code, I plan to improve on it in the future. I usually write down my plan and jot down notes, similar to pseudo-code, but it does not follow the proper structure or syntax that pseudo-code has. By learning pseudo-code, I aim to improve my planning strategy, which will come in handy for more complicated projects.
 
 # Generative AI Appendix
 [ChatGPT conversation](https://chatgpt.com/share/68c4af41-209c-800b-903e-1c02002b9cf0)
