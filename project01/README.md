@@ -1,5 +1,5 @@
 # Introduction
-Algorithm that processes [VCF file](/clinvar_20190923_short.vcf) and produces a dictionary that counts diseases that have an `AF_EXAC` key less than 0.0001. 
+Algorithm that processes [VCF file](./clinvar_20190923_short.vcf) and produces a dictionary that counts diseases that have an `AF_EXAC` key less than 0.0001. 
 
 # Pseudocode
 
