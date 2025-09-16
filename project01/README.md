@@ -4,6 +4,8 @@ Algorithm that processes [VCF file](./clinvar_20190923_short.vcf) and produces a
 # Pseudocode
 
 ```
+from pprint import pprint
+
 def parse_line(line):
   split_line = strip line of whitespace and split by tabs
   info = save the 7th index
@@ -43,7 +45,8 @@ def read_file(file):
 
   return disease count dictionary
 
-read_file(filename)  
+if __name__ == "__main__":
+    pprint(read_file("clinvar_20190923_short.vcf")) 
 ```
 
 # Successes
