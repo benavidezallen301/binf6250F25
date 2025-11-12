@@ -91,17 +91,16 @@ Return: path of best states
 
 
 # Successes
-
+We were able to understand what was needed for the algorithm very quickly. We also were able to meet up and work on the project together several times.
 
 # Struggles
 * understanding how posterior marginal probability and posterior decoding worked
 
 # Personal Reflections
-## Group Leader
-Group leader's reflection on the project
+## Group Leader- Allen
+I felt that this project was much smoother than some of the other projects. The alogrithms were straightforward to understand however we did have a bit of trouble when completing the forward-backward algorithm. However we later figured out the issue and got it to work. Overall, this went well especially since we had a few long sessions where we were able to work on this synchronously.
 
 ## Other member - Zoe
 This project was fairly straightforward to implement, as the underlying theory closely follows the Viterbi Algorithm. We used the Viterbi algorithm as a template for our code and adapted it accordingly. One challenge arose when calculating the posterior marginal probabilities is that we initially forgot that the total accumulated forward and backward probabilities should be nearly identical. Once we understood this, it was a simple fix in our code. Additionally, we considered how posterior decoding works, noting that it selects the state with the highest posterior probability at each position. We realized that this approach could lead to issues when more than two states are available, as it may produce impossible paths. Despite these challenges, I believe we were able to implement the algorithm correctly and effectively.
 
 # Generative AI Appendix
-As per the syllabus
