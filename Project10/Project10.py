@@ -149,7 +149,7 @@ class BaseHMM:
 
         for i in range(len_states):
             for j in range(len_obs):
-                PMP[i,j] = self.PMP_calc(
+                PMP[i,j] = self._PMP_calc(
                     i,j,
                     forward_matrix, total_forward,
                     backward_matrix, total_backward
@@ -208,3 +208,39 @@ class BaseHMM:
     computes the Baum-Welch algorithm using the BaseHMM attributes
     """
     
+if __name__ == "__main__":
+
+    # 1. Define a simple list of states
+    states = ["H", "L"]   # High / Low GC, or any states you want
+
+    # 2. Create an HMM with random parameters (init_probs=None etc.)
+    model = BaseHMM(states=states, seed=123)
+
+    # 3. Print the randomly initialized model
+    print("\n=== INITIAL PROBABILITIES ===")
+    print(model.init_probs)
+
+    print("\n=== TRANSITION PROBABILITIES ===")
+    for s in model.trans_probs:
+        print(s, model.trans_probs[s])
+
+    print("\n=== EMISSION PROBABILITIES ===")
+    for s in model.emit_probs:
+        print(s, model.emit_probs[s])
+
+    # 4. Create a random test observation sequence
+    obs = "ACGTACGTAC"
+
+    print("\n=== FORWARD RESULTS ===")
+    fwd, fprob = model.forward(obs)
+    print(fwd)
+    print("Forward total prob =", fprob)
+
+    print("\n=== BACKWARD RESULTS ===")
+    bwd, bprob = model.backward(obs)
+    print(bwd)
+    print("Backward total prob =", bprob)
+
+    print("\n=== FORWARD-BACKWARD (decoded path) ===")
+    path = model.forward_backward(obs)
+    print("Decoded path:", path)
