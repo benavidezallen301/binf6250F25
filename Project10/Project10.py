@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy
 
 
-class BaseHMM:
+class HMM:
     """
     Base class for Hidden Markov Model objects
     Attributes
@@ -30,6 +30,7 @@ class BaseHMM:
         if states is None:
             raise ValueError("States cannot be empty")
         self.states = states
+        self.len_states = len(states)
 
         self.emissions = emissions
 
@@ -71,12 +72,11 @@ class BaseHMM:
         """
         Create the foward algorithm
         """
-        len_states = len(self.states)
         len_obs = len(obs)
 
-        forward_matrix = np.zeros((len_states, len_obs))
+        forward_matrix = np.zeros((self.len_states, len_obs))
 
-        for i in range(len_states):
+        for i in range(self.len_states):
             state = self.states[i]
             first_obs = obs[0]
             forward_matrix[i,0] = (
@@ -86,17 +86,17 @@ class BaseHMM:
         
         #To fill the matrix
         for j in range(1, len_obs):
-            next_obs = obs[j]
-            for i in range(len_states):
+            next_sym = obs[j]
+            for i in range(self.len_states):
                 curr_state = self.states[i]
                 prob = 0
-                for k in range(len_states):
-                    prev_state = self.states[k]
-                    prev_val = forward_matrix[k, j -1]
-                    trans = self.trans_probs[prev_state][curr_state]
-                    emit = self.emit_probs[curr_state][next_obs]
-                    prob += prev_val * trans * emit
+                for last_i in range(self.len_states):
+                    prev_state = self.states[last_i]
+                    prev_val = forward_matrix[last_i, j-1]
+                    prob += self._calc_prob(prev_val, prev_state, curr_state, next_sym)
+
                 forward_matrix[i,j] = prob
+
         total_forward = np.sum(forward_matrix[:, -1])
         return forward_matrix, total_forward
 
@@ -106,115 +106,157 @@ class BaseHMM:
         """
         Create the backward algorithm
         """
-        len_states = len(self.states)
         len_obs = len(obs)
-
-        backward_matrix = np.zeros((len_states, len_obs))
+        backward_matrix = np.zeros((self.len_states, len_obs))
 
         backward_matrix[:, -1] = 1
 
         for j in range(len_obs -2, -1, -1):
             next_sym = obs[j + 1]
 
-            for i in range(len_states):
+            for i in range(self.len_states):
                 curr_state = self.states[i]
                 prob = 0
 
-                for k in range(len_states):
-                    next_state = self.states[k]
-                    next_val = backward_matrix[k,j + 1]
-                    trans = self.trans_probs[curr_state][next_state]
-                    emit = self.emit_probs[next_state][next_sym]
-                    prob += next_val * trans * emit
+                for next_i in range(self.len_states):
+                    next_state = self.states[next_i]
+                    next_val = backward_matrix[next_i, j + 1]
+                    prob += self._calc_prob(next_val, curr_state, next_state, next_sym)
                 
                 backward_matrix[i,j] = prob
             
-            accum = 0
-            first_sym = obs[0]
-            for i in range(len_states):
-                init = self.init_probs[self.states[i]]
-                emit = self.emit_probs[self.states[i]][first_sym]
-                back = backward_matrix[i, 0]
-                accum += init * emit * back
+        accum = np.sum(
+            [
+                self.init_probs[self.states[i]] * self.emit_probs[self.states[i]][obs[0]] * self.bwd_matrix[i, 0]
+                for i in range(self.len_states)
+            ]
+        )
+
         return backward_matrix, accum
-    
-    def forward_backward(self, obs):
-        len_states = len(self.states)
-        len_obs = len(obs)
 
-        PMP = np.zeros((len_states, len_obs))
-
-        forward_matrix, total_forward = self.forward(obs)
-        backward_matrix, total_backward = self.backward(obs)
-
-        for i in range(len_states):
-            for j in range(len_obs):
-                PMP[i,j] = self._PMP_calc(
-                    i,j,
-                    forward_matrix, total_forward,
-                    backward_matrix, total_backward
-                )
-        path = self._posterior_decoding(PMP)
-
-        return path
-    
-
-    def _PMP_calc(
-        self, i, j, forward_matrix, total_forward, backward_matrix, total_backward
-    ):
+    def exp_max(self, obs):
         """
-        Calculate the posterior marginal probability of each state and symbol of the observation.
-
-        Arg:
-            i (int): current state position
-            j (int): current symbol (observation position)
-            forward_matrix (array): probability matrix of the observation based on the Forward Algorithm
-            total_forward (float): total accumulated probability for the forward matrix (sum of last column)
-            backward_matrix (array): probability matrix of the observation based on the Backward Algorithm
-            total_backward (float): total accumulated probability for the backward matrix (sum of last column)
-        Returns:
-            PMP (float): posterior marginal probability for the current position
+        Calculate and update models 
         """
 
-        prob = (total_forward + total_backward) / 2
+        total_prob = 0  # initialize total prob
+        poss_i, poss_t, poss_e = self._copy_reset()  # initialize models to store possible initial, transition, and emission values
 
-        PMP = forward_matrix[i, j] * backward_matrix[i, j] / prob
+        for seq in obs:
+            fwd_prob, fwd_matrix = self.forward(seq, self.states)
+            bwd_prob, bwd_matrix = self.backward(seq, self.states)
 
-        return PMP
+            # update total_prob throughout
+            total_prob += (fwd_prob + bwd_prob)/2
 
-    # Forward-Backward function uses _posterior_decoding() to determint the most probable state at each position
-    def _posterior_decoding(self, PMP_matrix):
+            for state_i, state in enumerate(self.states):
+                for seq_i, letter in enumerate(seq):
+
+                    # calculate new prob for initial and emission models
+                    new_prob = fwd_matrix[state_i][seq_i] * bwd_matrix[state_i][seq_i]
+
+                    # update initial probabilities
+                    if seq_i == 0:
+                        poss_i[state] += new_prob
+
+                    # update emission probabilities
+                    poss_e[state][letter] += new_prob
+
+            # calculate and update transition probabiltiies
+            for next_state_i, next_state in enumerate(self.states):
+                for seq_i in range(len(seq)-1):  # index 0 to last of the sequence 
+                    poss_t[state][next_state] += (
+                        fwd_matrix[state_i][seq_i]
+                        * self.trans_probs[state][next_state]
+                        * self.emit_probs[next_state][seq[seq_i+1]]
+                        * bwd_matrix[next_state_i][seq_i+1]
+                    )
+        
+        # scale
+        scaled_i = {key: value/total_prob for key, value in poss_i.items()}
+        scaled_t = {
+            key1: {key2: value / total_prob for key2, value in inner_t.items()}
+            for key1, inner_t in poss_t.items()
+        }
+        scaled_e = {
+            key1: {key2: value / total_prob for key2, value in inner_e.items()}
+            for key1, inner_e in poss_e.items()
+        }
+
+        # normalize
+
+        new_i = {key: value/sum(scaled_i.values()) for key, value in scaled_i.items()}
+        new_t = {
+            key1: {key2: value/sum(inner_t.values()) for key2, value in inner_t.items()}
+            for key1, inner_t in scaled_t.items()
+        }
+        new_e = {
+            key1: {key2: value/sum(inner_e.values()) for key2, value in inner_e.items()}
+            for key1, inner_e in scaled_e.items()
+        }
+
+        return new_i, new_t, new_e
+
+    def converge():
         """
-        Perform Posterior Decoding to find the most probable state at each position
-
-        Arg:
-            PMP_matrix (array): matrices of posterior marginal probability
-        Returns:
-            path (str):
         """
 
-        # find index of best state in each position
-        best_states = list(np.argmax(PMP_matrix, axis=0))
 
-        # generate path from best_states
-        path = "-".join(self.states[i] for i in best_states)
+    def _calc_prob(self, prob, from_state, to_state, emit):
+        """
+        calculate probabilities for forward and backward algorithms
 
-        return path
+        Args:
+            prob (float): previous probability/next probability
+            from_state (str): where the calculation is coming from
+            to_state (str): next state
+            emit (str): emission from the sequence
+
+        Return:
+            prob (float): forward/backward probability at that position
+        """
+        prob = prob * self.trans_probs[from_state][to_state] * self.emit_probs[to_state][emit]
+        return prob
+
+    def _copy_reset(self):
+        next_i_probs = self.init_probs.copy()
+        next_t_probs = self.trans_probs.copy()
+        next_e_probs = self.emit_probs.copy()
+
+                # reset model for update
+        for state in states:
+            next_i_probs[state] = 0
+            for emit in self.emissions:
+                next_e_probs[state][emit] = 0
+            
+            for next_state in states:
+                next_t_probs[state][next_state] = 0
+
+        return next_i_probs, next_t_probs, next_e_probs
+
+    def _comp_models(self, new_i, new_t, new_e):
+        """
+        helper function to compare the new and old models
+
+        Args:
+            new_i (dict): new initial probability model for comparison
+            new_t (dict of dict): new transition probability model for comparison
+            new_e (dict of dict): new emission probability model for comparison
+
+        Return:
+            True/False: will be used to tell convergence model if the models are close enough or not
+        """
 
 
     
-#class HMM(BaseHMM):
-    """ 
-    computes the Baum-Welch algorithm using the BaseHMM attributes
-    """
-    
+   
 if __name__ == "__main__":
 
     # 1. Define a simple list of states
     states = ["H", "L"]   # High / Low GC, or any states you want
 
     # 2. Create an HMM with random parameters (init_probs=None etc.)
-    model = BaseHMM(states=states, seed=123)
+    model = HMM(states=states, seed=123)
 
     # 3. Print the randomly initialized model
     print("\n=== INITIAL PROBABILITIES ===")
