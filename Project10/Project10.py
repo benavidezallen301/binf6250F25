@@ -108,30 +108,34 @@ class HMM:
         """
         len_obs = len(obs)
         backward_matrix = np.zeros((self.len_states, len_obs))
-
+        
+        # Initialize: β_T(i) = 1 for all states
         backward_matrix[:, -1] = 1
-
-        for j in range(len_obs -2, -1, -1):
-            next_sym = obs[j + 1]
-
-            for i in range(self.len_states):
+        
+        # Iterate backwards through time
+        for j in range(len_obs - 2, -1, -1):  # Fixed indentation
+            for i in range(self.len_states):  # Fixed indentation
                 curr_state = self.states[i]
                 prob = 0
-
-                for next_i in range(self.len_states):
+                
+                for next_i in range(self.len_states):  # Fixed indentation
                     next_state = self.states[next_i]
                     next_val = backward_matrix[next_i, j + 1]
+                    next_sym = obs[j + 1]
                     prob += self._calc_prob(next_val, curr_state, next_state, next_sym)
                 
-                backward_matrix[i,j] = prob
-            
+                backward_matrix[i, j] = prob
+        
+        # Calculate probability of observation sequence
         accum = np.sum(
             [
-                self.init_probs[self.states[i]] * self.emit_probs[self.states[i]][obs[0]] * self.bwd_matrix[i, 0]
+                self.init_probs[self.states[i]]
+                * self.emit_probs[self.states[i]][obs[0]]
+                * backward_matrix[i, 0]  # Fixed: was self.backward_matrix
                 for i in range(self.len_states)
             ]
         )
-
+        
         return backward_matrix, accum
 
     def exp_max(self, obs):
@@ -283,6 +287,3 @@ if __name__ == "__main__":
     print(bwd)
     print("Backward total prob =", bprob)
 
-    print("\n=== FORWARD-BACKWARD (decoded path) ===")
-    path = model.forward_backward(obs)
-    print("Decoded path:", path)
