@@ -147,8 +147,8 @@ class HMM:
         poss_i, poss_t, poss_e = self._copy_reset()  # initialize models to store possible initial, transition, and emission values
 
         for seq in obs:
-            fwd_prob, fwd_matrix = self.forward(seq, self.states)
-            bwd_prob, bwd_matrix = self.backward(seq, self.states)
+            fwd_prob, fwd_matrix = self.forward(seq)
+            bwd_prob, bwd_matrix = self.backward(seq)
 
             # update total_prob throughout
             total_prob += (fwd_prob + bwd_prob)/2
@@ -200,10 +200,34 @@ class HMM:
         }
 
         return new_i, new_t, new_e
+    
 
-    def converge():
+
+    def converge(self, new_i, new_t, new_e):
         """
         """
+        init = self._comp_models(new_i, self.init_probs)
+        trans = self._comp_models(new_t,self.trans_probs)
+        emit = self._comp_models(new_e,self.emit_probs)
+
+        if init and trans and emit:
+            return True
+        else:
+            return False
+
+    def baum_welch(self, obs):
+        #self._initialize_probs(seed)
+        new_i,new_t,new_e = self.exp_max(obs)
+        
+        while self.converge(new_i,new_t, new_e) is False:
+            self.init_probs = new_i
+            self.trans_probs = new_t
+            self.emit_probs = new_e
+
+            new_i,new_t,new_e = self.exp_max(obs)
+        return self.init_probs, self.trans_probs, self.emit_probs
+
+
 
 
     def _calc_prob(self, prob, from_state, to_state, emit):
@@ -238,52 +262,45 @@ class HMM:
 
         return next_i_probs, next_t_probs, next_e_probs
 
-    def _comp_models(self, new_i, new_t, new_e):
+    def _comp_models(self, new_model, old_model):
         """
         helper function to compare the new and old models
 
         Args:
-            new_i (dict): new initial probability model for comparison
-            new_t (dict of dict): new transition probability model for comparison
-            new_e (dict of dict): new emission probability model for comparison
+            new_model (dict): new probability model for comparison
+            old_model (dict): old probability model for comparison
 
         Return:
             True/False: will be used to tell convergence model if the models are close enough or not
         """
 
+        new_val = new_model.values()
+        old_val = old_model.values()
 
-    
+        # Convert to lists
+        new_list = list(new_val)
+        old_list = list(old_val)
+
+        # Check if they're dictionaries (nested structure)
+        if isinstance(new_list[0], dict):
+            # For nested dictionaries (like transition/emission probs)
+            # Need to flatten the nested values
+            new_flat = [v for d in new_list for v in d.values()]
+            old_flat = [v for d in old_list for v in d.values()]
+            return np.allclose(new_flat, old_flat)
+        else:
+            # For simple values (like initial probs)
+            return np.allclose(new_list, old_list)
+ 
+ 
    
 if __name__ == "__main__":
-
-    # 1. Define a simple list of states
-    states = ["H", "L"]   # High / Low GC, or any states you want
-
-    # 2. Create an HMM with random parameters (init_probs=None etc.)
-    model = HMM(states=states, seed=123)
-
-    # 3. Print the randomly initialized model
-    print("\n=== INITIAL PROBABILITIES ===")
-    print(model.init_probs)
-
-    print("\n=== TRANSITION PROBABILITIES ===")
-    for s in model.trans_probs:
-        print(s, model.trans_probs[s])
-
-    print("\n=== EMISSION PROBABILITIES ===")
-    for s in model.emit_probs:
-        print(s, model.emit_probs[s])
-
-    # 4. Create a random test observation sequence
-    obs = "ACGTACGTAC"
-
-    print("\n=== FORWARD RESULTS ===")
-    fwd, fprob = model.forward(obs)
-    print(fwd)
-    print("Forward total prob =", fprob)
-
-    print("\n=== BACKWARD RESULTS ===")
-    bwd, bprob = model.backward(obs)
-    print(bwd)
-    print("Backward total prob =", bprob)
+    obs = ["GGCACTGAA", "ATGCAATGC", "AATGCCTGA"]
+    seq = "GGCACTGAA"
+    hmm = HMM(states= ["H","L"], seed = 42)
+    print(hmm.exp_max(obs))
+    #init,trans,emit = hmm.baum_welch(obs)
+    #print(f"Initial Probabilities: {init}")
+    #print(f"Transition probabilites: {trans}")
+    #print(f"Emission Probabilites {emit}")
 
