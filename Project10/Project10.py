@@ -252,12 +252,12 @@ class HMM:
         next_e_probs = self.emit_probs.copy()
 
                 # reset model for update
-        for state in states:
+        for state in self.states:
             next_i_probs[state] = 0
             for emit in self.emissions:
                 next_e_probs[state][emit] = 0
             
-            for next_state in states:
+            for next_state in self.states:
                 next_t_probs[state][next_state] = 0
 
         return next_i_probs, next_t_probs, next_e_probs
