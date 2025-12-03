@@ -19,10 +19,6 @@ class HMM:
         Emission probabilities
     seed : int
         Number to set seed to control randomness
-    precision : int
-        Number for floating point precision
-    tolerance : float
-        Acceptable range of variation 
     """
 
     def __init__(self,states, emissions = 'ACGT', init_probs = None, trans_probs = None, emit_probs = None, seed = 42): # precision, tolerance):
@@ -131,7 +127,7 @@ class HMM:
             [
                 self.init_probs[self.states[i]]
                 * self.emit_probs[self.states[i]][obs[0]]
-                * backward_matrix[i, 0]  # Fixed: was self.backward_matrix
+                * backward_matrix[i, 0]  
                 for i in range(self.len_states)
             ]
         )
@@ -140,18 +136,22 @@ class HMM:
 
     def exp_max(self, obs):
         """
-        Calculate and update models 
+        Expectation and Maximum Steps of Baum-Welch. We scaled and normalized our calculations to prevent numerical underflow instead of working in Log-Phase. 
+        Returns:
+            new_i (dict): New Initial Probabilties
+            new_t (dict of dict): New Transition Probabilities
+            new_e (dict of dict): New Emission Probabilities
         """
 
         total_prob = 0  # initialize total prob
         poss_i, poss_t, poss_e = self._copy_reset()  # initialize models to store possible initial, transition, and emission values
 
         for seq in obs:
-            fwd_prob, fwd_matrix = self.forward(seq)
-            bwd_prob, bwd_matrix = self.backward(seq)
+            fwd_matrix, fwd_prob = self.forward(seq)
+            bwd_matrix, bwd_prob = self.backward(seq)
 
             # update total_prob throughout
-            total_prob += (fwd_prob + bwd_prob)/2
+            total_prob += (fwd_prob+bwd_prob)/2
 
             for state_i, state in enumerate(self.states):
                 for seq_i, letter in enumerate(seq):
@@ -166,16 +166,17 @@ class HMM:
                     # update emission probabilities
                     poss_e[state][letter] += new_prob
 
-            # calculate and update transition probabiltiies
-            for next_state_i, next_state in enumerate(self.states):
-                for seq_i in range(len(seq)-1):  # index 0 to last of the sequence 
-                    poss_t[state][next_state] += (
-                        fwd_matrix[state_i][seq_i]
-                        * self.trans_probs[state][next_state]
-                        * self.emit_probs[next_state][seq[seq_i+1]]
-                        * bwd_matrix[next_state_i][seq_i+1]
-                    )
+                # calculate and update transition probabiltiies
+                for next_state_i, next_state in enumerate(self.states):
+                    for seq_i in range(len(seq)-1):  # index 0 to last of the sequence 
+                        poss_t[state][next_state] += (
+                            fwd_matrix[state_i][seq_i]
+                            * self.trans_probs[state][next_state]
+                            * self.emit_probs[next_state][seq[seq_i+1]]
+                            * bwd_matrix[next_state_i][seq_i+1]
+                        )
         
+    
         # scale
         scaled_i = {key: value/total_prob for key, value in poss_i.items()}
         scaled_t = {
@@ -186,9 +187,8 @@ class HMM:
             key1: {key2: value / total_prob for key2, value in inner_e.items()}
             for key1, inner_e in poss_e.items()
         }
-
+        
         # normalize
-
         new_i = {key: value/sum(scaled_i.values()) for key, value in scaled_i.items()}
         new_t = {
             key1: {key2: value/sum(inner_t.values()) for key2, value in inner_t.items()}
@@ -203,28 +203,58 @@ class HMM:
     
 
 
-    def converge(self, new_i, new_t, new_e):
+    def converge(self, new_i, new_t, new_e, old_i, old_t, old_e):
         """
+        Checks if the new model is close to the old model
+        Args:
+            new_i (dict): New Initial Probabilites
+            new_t (dict of dict): New Transition Probabilities
+            new_e (dict of dict): New Emission Probabilities
+            old_i (dict): Last Initial Probabilities
+            old_t (dict of dict): Last Transition Probabilties
+            old_e (dict of dict): Last Emission Probabilities
         """
-        init = self._comp_models(new_i, self.init_probs)
-        trans = self._comp_models(new_t,self.trans_probs)
-        emit = self._comp_models(new_e,self.emit_probs)
+        # compare each individual component of the model
+        init = self._comp_models(new_i, old_i)
+        trans = self._comp_models(new_t, old_t)
+        emit = self._comp_models(new_e, old_e)
 
+        # if all components are close, then return true, else false
         if init and trans and emit:
             return True
         else:
             return False
 
-    def baum_welch(self, obs):
-        #self._initialize_probs(seed)
-        new_i,new_t,new_e = self.exp_max(obs)
-        
-        while self.converge(new_i,new_t, new_e) is False:
-            self.init_probs = new_i
-            self.trans_probs = new_t
-            self.emit_probs = new_e
+    def baum_welch(self, obs, max_iter=1000):
+        """
+        Baum-welch algorithm 
+        Args:
+            obs (list): list of sequences
+            max_iter (int): max number of iterations
+        Return:
+            Initial Probabilities
+            Transition Probabilities
+            Emission Probabilities
+        """    
+        for i in range(max_iter):
+            # save old param for comparison
+            old_i = self.init_probs.copy()
+            old_t = deepcopy(self.trans_probs)
+            old_e = deepcopy(self.emit_probs)
 
-            new_i,new_t,new_e = self.exp_max(obs)
+            # get new model
+            new_i, new_t, new_e = self.exp_max(obs)
+
+            # check if models are close
+            # if true break, else update 
+            if self.converge(new_i, new_t, new_e, old_i, old_t, old_e):
+                print(f"Converge after {i} iterations")
+                break
+            else:
+                self.init_probs = new_i
+                self.trans_probs = new_t
+                self.emit_probs = new_e
+
         return self.init_probs, self.trans_probs, self.emit_probs
 
 
@@ -247,9 +277,12 @@ class HMM:
         return prob
 
     def _copy_reset(self):
+        """
+        Helper function to create new initial, transition, and emission probability holders
+        """
         next_i_probs = self.init_probs.copy()
-        next_t_probs = self.trans_probs.copy()
-        next_e_probs = self.emit_probs.copy()
+        next_t_probs = deepcopy(self.trans_probs)
+        next_e_probs = deepcopy(self.emit_probs)
 
                 # reset model for update
         for state in self.states:
@@ -283,8 +316,7 @@ class HMM:
 
         # Check if they're dictionaries (nested structure)
         if isinstance(new_list[0], dict):
-            # For nested dictionaries (like transition/emission probs)
-            # Need to flatten the nested values
+            # For nested dictionaries (like transition/emission probs) flatten the nested values
             new_flat = [v for d in new_list for v in d.values()]
             old_flat = [v for d in old_list for v in d.values()]
             return np.allclose(new_flat, old_flat)
@@ -298,9 +330,8 @@ if __name__ == "__main__":
     obs = ["GGCACTGAA", "ATGCAATGC", "AATGCCTGA"]
     seq = "GGCACTGAA"
     hmm = HMM(states= ["H","L"], seed = 42)
-    print(hmm.exp_max(obs))
-    #init,trans,emit = hmm.baum_welch(obs)
-    #print(f"Initial Probabilities: {init}")
-    #print(f"Transition probabilites: {trans}")
-    #print(f"Emission Probabilites {emit}")
+    init, trans, emit = hmm.baum_welch(obs)
+    print(f"Initial Probabilities: {init}")
+    print(f"Transition probabilites: {trans}")
+    print(f"Emission Probabilites: {emit}")
 
