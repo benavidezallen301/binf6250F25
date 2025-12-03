@@ -72,7 +72,7 @@ The coding portion wasn’t too difficult once we worked out the algorithm and c
 
 # Personal Reflections
 ## Group Leader
-Group leader's reflection on the project
+I found this project to be somewhat difficult since the baum-welch algorithm was not clear to me at first. Other aspects felt familiar so that helped me to not feel totally lost. Zoe and I took our time with this project and tackled it one piece at a time and met up several times to go over parts of the code. Overall, I am happy with where we got with our algorithm even though there are areas of improvment.
 
 ## Other member - Zoe
 The formulas of this algorithm were a bit confusing to me at first, but after doing additional research and talking it out with Marcus, I was able to understand how to implement them. Allen and I broke down the code and split up the work, which allowed me to give my full attention to specific aspects of the algorithm. It was also easier to understand and explain what we did when we came back to discuss our work. This algorithm is not perfect, but I think we got pretty far. I'm still not 100% certain that I implemented the formulas correctly because the results looked a bit strange as it continued to iterate and converge, but the probabilities still add up to 1 within the dictionaries and the scaling should've handled any numerical underflow issues. 
