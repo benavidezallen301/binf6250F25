@@ -1,11 +1,6 @@
 import numpy as np
 import math
 
-START = 0
-LEFT = 1
-DIAG_UP = 2
-DIAG_DOWN = 3
-
 
 class HMM:
     """
@@ -44,135 +39,52 @@ class HMM:
             for state in emit_probs
         }
 
-    def _max_probabilities(self, i, j, obs, prob_matrix):
-        """
-        Calculate maximum probability and determine the traceback direction of each position of the observation.
-        Args:
-            i (int): current state position
-            j (int): current observation position
-            obs (str): observation
-            prob_matrix (array): probability matrix
-        Returns:
-            max_prob (float): Best log probability to reach this state at this position
-            traceback (int): encoded traaceback direction
-        """
-        rows = len(self.states)
-        state = self.states[i]
-        sym = obs[j]
-
-        if j == 0:
-            # calculate the probability of the first column
-            max_prob = self.init_probs[state] + self.emit_probs[state][sym]
-            traceback = START
-        else:
-            candidates = []  # (list of probability, traceback)
-
-            # LEFT - calculating prob from same state transition
-            left = prob_matrix[i, j - 1]
-            left_prob = (
-                left + self.trans_probs[state][state] + self.emit_probs[state][sym]
-            )
-            candidates.append((left_prob, LEFT))
-
-            # both cases will be performed if conditions are met (aka when there are more than 2 states)
-            # DIAG_DOWN
-            if i < rows - 1:
-                prev_state = self.states[i + 1]
-                diag_down = prob_matrix[i + 1, j - 1]
-                diag_down_prob = (
-                    diag_down
-                    + self.trans_probs[prev_state][state]
-                    + self.emit_probs[state][sym]
-                )
-                candidates.append((diag_down_prob, DIAG_DOWN))
-
-            if i > 0:
-                prev_state = self.states[i - 1]
-                diag_up = prob_matrix[i - 1, j - 1]
-                diag_up_prob = (
-                    diag_up
-                    + self.trans_probs[prev_state][state]
-                    + self.emit_probs[state][sym]
-                )
-                candidates.append((diag_up_prob, DIAG_UP))
-
-            # select greatest probability with corresponding traceback direction
-            max_prob, traceback = max(candidates, key=lambda x: x[0])
-
-        return max_prob, traceback
-
-    def _traceback(self, traceback_matrix, max_position):
-        """
-        Use the traceback matrix to reconstruct the most optimal path of states for the observation.
-        Args:
-            traceback_matrix (np.array): traceback matrix
-            max_position (tuple): starting point for traceback
-        Returns:
-            optimal_path (str): reconstructed optimal state path after computation
-        """
-        tb_path = []  # use a list to store traceback path since states could be words instead of single chr
-
-        # initialize starting position
-        current_row, current_col = max_position
-
-        # stop condition: reached start column
-        while True:
-            # record state before moving
-            tb_path.append(self.states[current_row])
-
-            # break condition
-            if current_col == 0:
-                break
-
-            current_move = traceback_matrix[current_row, current_col]
-
-            if current_move == LEFT:
-                current_col -= 1
-
-            elif current_move == DIAG_UP:
-                current_row -= 1
-                current_col -= 1
-
-            elif current_move == DIAG_DOWN:
-                current_row += 1
-                current_col -= 1
-
-        optimal_path = "-".join(tb_path[::-1])
-
-        return optimal_path
-
     def viterbi(self, obs):
-        """
-        Implement the Viterbi algorithm for finding the most likely sequence of hidden states given a sequence of observations.
-        Args:
-            obs (str): observation sequence
-        Returns:
-            optimal_path (str): reconstructed optimal state path after computation
-        """
+        """ """
+        len_states = len(self.states)
+        len_obs = len(obs)
 
-        # Determine dimensions of matrices (num of hidden states x len of obs)
-        rows = len(self.states)
-        columns = len(obs)
+        # initialize matrix with -inf since working in log-space
+        v_matrix = np.full((len_states, len_obs), -math.inf)
+        # initialize traceback matrix
+        traceback = np.zeros((len_states, len_obs), dtype=int)
 
-        # Initialization
-        prob_matrix = np.full((rows, columns), -math.inf)  # use -inf due to log-space
-        traceback_matrix = np.zeros((rows, columns), dtype=int)
+        # handle first col
+        for i, state in enumerate(self.states):
+            v_matrix[i, 0] = self.init_probs[state] + self.emit_probs[state][obs[0]]
 
-        # Recursion
-        for i in range(rows):
-            for j in range(columns):
-                # Calculate+update score and traceback of each position
-                prob_matrix[i, j], traceback_matrix[i, j] = self._max_probabilities(
-                    i, j, obs, prob_matrix
-                )
+        # fill in the rest of the matrix
+        for j in range(1, len_obs):  # for each emit in the obs
+            # iterate through the states
+            for i, state in enumerate(self.states):
+                prob_candidates = []
+                # calculate prob given the previous state
+                for last_i, prev_state in enumerate(self.states):
+                    prev_prob = v_matrix[last_i][j - 1]
+                    prob = (
+                        prev_prob
+                        + self.trans_probs[prev_state][state]
+                        + self.emit_probs[state][obs[j]]
+                    )
+                    prob_candidates.append(prob)
 
-        # determine max_position of the last column to start traceback
-        max_position = (np.argmax(prob_matrix[:, -1]), columns - 1)
+                # add greatest prob for current state and emit to matrix
+                best_prev = np.argmax(prob_candidates)
+                v_matrix[i][j] = prob_candidates[best_prev]
+                traceback[i][j] = best_prev
+
+        # termination
+        last_state = np.argmax(v_matrix[:, -1])
 
         # traceback
-        optimal_path = self._traceback(traceback_matrix, max_position)
+        path = [last_state]
+        for j in range(len_obs - 1, 0, -1):
+            path.append(traceback[path[-1]][j])
 
-        return optimal_path
+        path = path[::-1]  # reverse to get left → right
+
+        # convert indices to label names
+        return "-".join(self.states[i] for i in path)
 
 
 def main():
