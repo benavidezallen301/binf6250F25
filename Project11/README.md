@@ -41,15 +41,45 @@ Define Allowed Transitions:
 
 ## 3. Parameter Estimation from Labeled Columns
 ```
+    #Labeled paths
+    If column is determined to be Match:
+        rename the bases that were match as M_i (i being the position)
+        rename the gaps in that same column as deletions
+
+    #Emission Probabilities
+    For every state M_i:
+        total_count -> number of residues in the column
+        residue_frequency -> number of times the specific type of residue we are evaluating appeared in the column
+        b <- the pseudocount equal to 1
+        possible_amino_acids <- 20
+        formula -> (residue_frequency + b ) / (total_count + possible_amino_acids*b) # gives us prob
+
+    If intersion state:
+        We use a "pre-calculated" frequency. We can simply use the probability of an amino acid occuring across
+        all sequences. Example: if amino acid "L" occurs 25 times and there are 100 amino acids then prob = 0.25
+
+    #Transition Probabilities
+    create dictionary of dictionaries and create keys for states "M","I","D".
+    Keep record in that dictionary how many times a state transitions to another specific state.
+    Example  {
+        M:{I:4,D:2,M:10}
+        I:{M:12,I:1,D:3}
+    }
 ```
 
 ## 4. Integration with `HMM.py`
 ```
 Class ProfileHMM(BaseHMM):
     def hiddenstate:
+        Determine whether this state is match or insertion (using the 50% threshold)
     def init_probs:
-    def trans_probs
-    def_emit_probs
+        P(Begin) = 1
+    def trans_probs:
+        calculates probs from the dictionary of dictionary keeping tally of transitions from one state to another
+    def_emit_probs:
+        if column is "Match" then use the match calculation formula
+        if column is "Insertion" then use the pre-calculated probability
+        
 
 ```
 
