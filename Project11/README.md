@@ -68,6 +68,10 @@ Define Allowed Transitions:
         M:{I:4,D:2,M:10}
         I:{M:12,I:1,D:3}
     }
+
+    #Initial Probabilities
+    P(Begin) = 1
+    P(all other states) = 0
 ```
 
 ## 4. Integration with `HMM.py`
@@ -99,6 +103,7 @@ The HTML provided was helpful to get an intial understanding.
 ## Group Leader (Allen Benavidez)
 This project has probably been the most difficult for me. Building off of code actually made is hard to predict how the code behaved rather than saving time to work only on profile HMM. The process to create the profile HMM is also confusing and I feel that I initially misunderstood how the process worked for Matching states which derailed me from making some meaningful progress.
 ## Other member (Zoe Chow)
+This project was very difficult. It took us a long time to understand the algorithm, which resulted in less time actually coding. The algorithm came together as we pseudocoded, but we are not confident in the accuracy of our implementation. It was especially difficult trying to integrate this into the existing HMM file because we didn't know where to add or remove certain code. Ultimately, we decided to remove the entire HMM class and replace it with a ProfileHMM class instead. 
 
 # Generative AI Appendix
 

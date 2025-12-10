@@ -298,10 +298,9 @@ class ProfileHMM(BaseHMM):
         num_seqs = len(msa)
 
         # check if all sequences are the same length
-        if len(set(len(s) for s in msa)) == 1:
-            len_seq = len(msa[0])
-        else:
+        if len(set(len(s) for s in msa)) != 1:
             raise ValueError("Sequences must be the same length.")
+        len_seq = len(msa[0])
 
         # Initialize a matrix to store 1 if residue is an Amino Acid and 0 if -
         AA_matrix = np.zeros((num_seqs, len_seq))
@@ -464,11 +463,29 @@ class ProfileHMM(BaseHMM):
         return path
 
 
-    def estimate_emit_probs(self, msa, column_classification):
+    def estimate_emit_probs(self, msa, column_classification, b=1):
         """estimate emission probs from labeled sequences"""
 
         # initialize emit probs
         self.emit_probs = {}
+
+        # calculate background distribution p(a) for Insertion states
+        total_aa_counts = defaultdict(int)
+        total_aa = 0
+
+        for seq in msa:
+            for res in seq:
+                if res in self.alphabet:
+                    total_aa_counts[res] += 1
+                    total_aa += 1
+        
+        background_probs = {}
+        for aa in self.alphabet:
+            background_probs[aa] = (
+                total_aa_counts.get(aa, 0) / total_aa
+                if total_aa > 0
+                else 1.0 / len(self.alphabet)
+            )
 
         # count emissions for each state
         emission_counts = defaultdict(lambda: defaultdict(int))
@@ -478,23 +495,22 @@ class ProfileHMM(BaseHMM):
                 if emission is not None:
                     emission_counts[state][emission] += 1
 
+        # calculate emission probs
         possible_aa = len(self.alphabet)
-        b = 1  # set pseudocount
-        aa_total = sum(sum(inner_dict.values()) for inner_dict in emission_counts.values())  # total count within the entire dictionary 
-
+        
         for state, counts in emission_counts.items():
-
+            # skip deletion, begin, and end states
             if state.startswith("D") or state in ("Begin","End"):
                 continue
+
             total_count = sum(counts.values())  # total count in each state
             self.emit_probs[state] = {}
 
             # insertion emission(a) = p(a)
             if state[0] == "I":
                 for aa in self.alphabet:
-                    aa_freq = counts.get(aa, 0)
-                    prob = aa_freq/aa_total
-                    self.emit_probs[state][aa] = prob
+                    self.emit_probs[state][aa] = background_probs[aa]
+            # match states
             else:
                 # emission(a) = count (a) in state / (total residues aligned in state + 20b)
                 for aa in self.alphabet:  # for each possible aa 
@@ -504,16 +520,9 @@ class ProfileHMM(BaseHMM):
 
         return self.emit_probs
 
-    def estimate_trans_probs(self,msa, column_classification):
-        transition_counts = {}
-
-        for seq in msa:
-            
-            for current_state, next_state in zip(state_path, state_path[1:]):
-                transition_counts[current_state][next_state] += 1
 
     def estimate_trans_probs(self, msa, column_classification):
-
+        """estimate transition probs from labeled sequences"""
         transition_counts = {}
         transition_probs = {}
 
@@ -546,4 +555,363 @@ class ProfileHMM(BaseHMM):
                     transition_probs[s][next_state] = prob_calc
         
         self.trans_probs = transition_probs
-        return transition_probs 
+        return self.trans_probs 
+
+    def estimate_init_probs(self):
+        """
+        Set initial probs based on the hidden states. 
+        P(Begin)=1, P(all other states) = 0.0
+        """
+        
+        self.init_probs = {"Begin": 1.0}
+        
+        for state in self.hidden_states:
+            if state != "Begin":
+                self.init_probs[state] = 0.0
+
+
+    def forward(self, sequence):
+        """ The forward algorithm for calculating probability of sequence given HMM
+
+        Args:
+            sequence (str): a valid set of emissions from the HMM
+
+        Returns:
+            forward_prob (float): probability of the the sequence using the forward algorithm
+            forward (dict of array of float): the forward matrix of the probabilities of given bases at given positions and given states
+        """
+        # Initialize the lattice. I am using an array here because it is more
+        # performant in iteration and has a smaller footprint than mutliple dictionaries
+        forward = {state: array('d', [0] * len(sequence)) for state in self.hidden_states}
+
+        # Since the forward algorithm starts at the beginning, use the first emission
+        # and initial state probabilities to fill in the first column
+        for state in self.hidden_states:
+            forward[state][0] = self.init_probs[state] * self.emit_probs[state][sequence[0]]
+
+        # This is where things get interesting: by taking the cartesian product of the
+        # index position (along the sequence, starting from 1 since 0 is already filled in) and
+        # The hidden states, we can condense a nested for-loop into a single line.
+        for seq_idx, next_state in product(range(1, len(sequence)), self.hidden_states):
+
+            # Since the forward algorithm just takes the sum across states from a given state, we need 
+            # to tease each of the states out.
+            # Furthermore, this is always using the data that has already been calculated from the left.
+            for curr_state in self.hidden_states:
+                forward[next_state][seq_idx] += forward[curr_state][seq_idx - 1] * self.trans_probs[curr_state][next_state]
+
+            # Now that we have our positional sum, we use the emission probability for that state to update
+            forward[next_state][seq_idx] = (self.emit_probs[next_state][sequence[seq_idx]] 
+                                          * forward[next_state][seq_idx])
+
+        # When all is done, the final probability of the sequence (based on the forward algorithm),
+        # is the sum across both states at the end
+        forward_prob = sum(forward[state][-1] for state in self.hidden_states)
+        return forward_prob, forward 
+
+    def backward(self, sequence):
+        """ The backward algorithm for calculating probability of sequence given HMM
+
+        Args:
+            sequence (str): a valid set of emissions from the HMM
+
+        Returns:
+            backward_prob (float): probability of the the sequence using the backward algorithm
+            backward (dict of array of float): the backward matrix of the probabilities of given bases at given positions and given states
+        """
+        # Initialize the lattice. I am using an array here because it is more
+        # performant in iteration and has a smaller footprint than mutliple dictionaries
+        backward = {state: array('d', [0] * len(sequence)) for state in self.hidden_states}
+
+        # The backward algorithm starts at the end. Make that 1 and work from there
+        for state in self.hidden_states:
+            backward[state][-1] = 1
+
+        # Like the forward algorithm: by taking the cartesian product of the
+        # index position (along the sequence starting from the end since) and
+        # The hidden states, we can condense a nested for-loop into a single line.
+        rev_seq = range(len(sequence) - 1, 0, -1)
+        for seq_idx, last_state in product(rev_seq, self.hidden_states):
+
+            # Since the forward algorithm just takes the sum across states from a given state, we need 
+            # to tease each of the states out
+            # Furthermore, this is always using the data that has already been calculated from the right.
+            for curr_state in self.hidden_states:
+                backward[last_state][seq_idx-1] += backward[curr_state][seq_idx] * self.trans_probs[last_state][curr_state] * self.emit_probs[curr_state][sequence[seq_idx]]
+
+        # When all is done, the final probability of the sequence (based on the backward algorithm),
+        # is the sum across both states at the start (relative to left-to-right)
+        backward_prob = sum(backward[state][0]*self.init_probs[state] * self.emit_probs[state][sequence[0]] for state in self.hidden_states)
+        return backward_prob, backward
+
+    def forward_backward(self, sequence):
+        """ The forward-backward algorithm for calculating marginal posteriors given HMM
+
+        Args:
+            sequence (list): a list of valid emissions from the HMM
+
+        Returns:
+            posterior (list of dicts): all posteriors as a list
+        """
+        #Calculate forward and backward matrices
+        Pf, f_matrix = self.forward(sequence)
+        Pb, b_matrix = self.backward(sequence)
+
+        # Generally speaking, most will only use either the forward or the backward
+        # probability of the sequence...not both. However, these two probabilities
+        # should be nearly the identical and I like being conservative. So I use the
+        # average and everybody is included.
+        P = (Pf + Pb)/2
+
+        # Initialize the lattice. I am using an array here because it is more
+        # performant in iteration and has a smaller footprint than mutliple dictionaries
+        posterior = {state: array('d', [0] * len(sequence)) for state in self.hidden_states}
+
+        # By using the cartesian product of the range of the sequence length and
+        # the hidden states, I can condense a nested for-loop to a singe line
+        for i, state in product(range(len(sequence)), self.hidden_states):
+            posterior[state][i] = f_matrix[state][i] * b_matrix[state][i] / P  
+        return posterior
+
+    def viterbi(self, sequence):
+        """ The viterbi algorithm for decoding a string using a HMM
+
+        Args:
+            sequence (str): a list of valid emissions from the HMM
+
+        Returns:
+            result (str): optimal path through HMM given the model parameters
+                           using the Viterbi algorithm
+        """
+        def update_probs(base, previous):
+            """Nested function used to keep track of the current probabilities and update the next
+
+            Args:
+                base (str): the current emission
+                previous (dict of float): previous position's probabilities
+
+            Returns:
+                next_prob (dict of float): Next position's probabilities
+                tb (dict of str): The traceback from current to previous origin
+            """
+            curr_prob = {} # Will caclculate our current position's probabilities
+            next_prob = {} # Will contain the new position's probabilities
+            tb = {}        # Contains the computed traceback as {current_state: previous} entries
+
+            for next_state in self.hidden_states:
+                for curr_state in self.hidden_states:
+                    curr_prob[curr_state] = previous[curr_state] + np.log10(self.trans_probs[curr_state][next_state])
+
+                # This max function acts as a argmax. This is because the key parameter can take a function
+                # to determine how max is computed. Here we are telling it to base it on the values of the keys
+                # and not the keys themselves and then return the key matching the max value
+                origin = max(curr_prob, key=curr_prob.get)
+
+                # We use that origin the next states probability based on the current emission
+                next_prob[next_state] = np.log10(self.emit_probs[next_state][base]) + curr_prob[origin]
+                tb[next_state] = origin
+            return next_prob, tb
+
+        def get_traceback(traceback, last_origin):
+            """Nested function that parses the traceback dict and constructs the most optimal 
+            path of states given the sequence
+
+            Args:
+                traceback (dict of str): The traceback of all positions to their origins
+                last_origin (str): the max state from last position of the probability matrix
+
+            Returns:
+                tb (str):  the rest of the path, starting from last_origin
+            """
+            tb = ''
+
+            # Reverse the traceback so that we start at the end
+            for pos in reversed(traceback):
+                # We already determine last_origin based on the final outcome
+                # of the probability matrix
+                prev_origin = pos[last_origin]
+
+                # Keep adding to our sequence of optimal origins
+                tb += prev_origin
+
+                # Update for the next iteration
+                last_origin = prev_origin
+            return tb
+
+        traceback = []
+
+        first_base = sequence[0]
+
+        # Start off by using the initial conditions and the first emission of the sequence
+        previous = {state: np.log10(self.init_probs[state]) + np.log10(self.emit_probs[state][first_base]) for state in self.hidden_states}
+
+        # Go through all other positions and keep track of the running total of probabilities
+        for base in sequence[1:]:
+            update_previous, update_tb = update_probs(base, previous)
+            previous = update_previous
+            traceback.append(update_tb)
+
+        # Find the max state at the final position
+        result = max(previous, key=previous.get)
+
+        result += get_traceback(traceback, result)        
+
+        # Since Traceback starts at the end and works forward, 
+        # we need to reverse the result
+        return result[::-1]
+
+    def baum_welch(self, sequences, pseudocount = 1e-100):
+        """Baum-Welch is an EM-algorithm that finds the maximum likelihood estimate of 
+        the parameters of a HMM given a set of observed emission sequences.
+
+        Note: Used when the user doesn't know all/any of the HMM's probabilities.
+
+        Args:
+            sequences (list of str): all the sequences used for training the HMM
+            pseudocount (number): some pseudocount to prevent ZeroDivisionError (default: 1e-100)
+        """
+        def init_bw(pseudocount):
+            """Initializes the pseudocount-filled probability matrices for init, trans, and emit
+
+            Args:
+                pseudocount (number): some pseudocount to prevent ZeroDivisionError
+
+            Returns:
+                init (dict of floats): Pseudocount-filled matrix for initial steps
+                trans (dict of dict of floats): Pseudocount-filled matrix for transition probabilities from one state to another given a state
+                emit (dict of dict of floats): Pseudocount-filled matrix for emission probabilities of a letter given a state
+            """
+            init = {state: pseudocount for state in self.hidden_states}
+            trans = {state: {next_state: pseudocount for next_state in self.hidden_states} for state in self.hidden_states}
+            emit = {state: {letter: pseudocount for letter in self.alphabet} for state in self.hidden_states}
+            return init, trans, emit
+        
+        def proc_seq(outer, seq, init, trans, emit):
+            """Processes a given sequence such that init, trans, and emit 
+            are updated as specific emission are computed.
+
+            Args:
+                outer (float): the sum of observed sequence probabilities
+                init (dict of floats): β probabilities for initial steps
+                trans (dict of dict of floats): Transition probabilities from one state to another given a state
+                emit (dict of dict of floats): Emission probabilities of a letter given a state
+
+            Returns:
+                outer (float): incremented sum of observed sequence probabilities
+                init (dict of floats): Scaled β probabilities for initial steps
+                trans (dict of dict of floats): Scaled Transition probabilities from one state to another given a state
+                emit (dict of dict of floats): Scaled Emission probabilities of a letter given a state
+            """
+            prob_forward, forward = self.forward(seq)
+            prob_backward, backward = self.backward(seq)
+
+            # Fun Durbin step because, ummm...stats?
+            # Generally speaking, most will only use either the forward or the backward
+            # probability of the sequence...not both. However, these two probabilities
+            # should be nearly the identical and I like being conservative. So I use the
+            # average and everybody is included.
+            outer += (prob_forward + prob_backward)/2
+
+            # As I go through the sequence one emission at a time...
+            for i, emission in enumerate(seq):
+                # and visit each possible state that emission can be from...
+                for state in self.hidden_states:
+                    # I need to take into account the very first observation coming from the initial step
+                    if i == 0:
+                        init[state] += forward[state][i] * backward[state][i]
+                    # and update the emission matrix for every emission observed at the given step
+                    emit[state][emission] += forward[state][i] * backward[state][i]
+
+                    if i == len(seq) - 1:
+                        break # I have reached the end of the sequence wrt to transitions, so I stop
+
+                    # Transitions are fun because it is always based on where it can go from where it is.
+                    # Therefore we are always looking ahead
+                    trans_emission = seq[i+1]
+                    for next_state in self.hidden_states:
+                        # Based on the 'future' state given our 'current' state, we use the probability of
+                        # the next emission at the next position at the next state to update our transition
+                        # matrix
+                        trans[state][next_state] += (
+                            forward[state][i] 
+                            * self.trans_probs[state][next_state]
+                            * self.emit_probs[next_state][trans_emission] 
+                            * backward[next_state][i+1]
+                        )
+
+            return outer, init, trans, emit
+
+        def scale_step(outer, init, trans, emit):
+            """Scales all the probability matrices based on the sum of
+            observed sequence probabilities.
+
+            Args:
+                outer (float): the sum of observed sequence probabilities
+                init (dict of floats): β probabilities for initial steps
+                trans (dict of dict of floats): Transition probabilities from one state to another given a state
+                emit (dict of dict of floats): Emission probabilities of a letter given a state
+
+            Returns:
+                init (dict of floats): Scaled β probabilities for initial steps
+                trans (dict of dict of floats): Scaled Transition probabilities from one state to another given a state
+                emit (dict of dict of floats): Scaled Emission probabilities of a letter given a state
+            """
+            # Use that fun outer denominator we have been keeping track of. However,
+            # if only one sequence is provided, the user could just use the posterior
+            # (or forward_backward algorithm) instead.
+            # For each of the matrices, we are essentially dividing all of our observed
+            # probabilities by the probability of the sequences. If we don't we will greatly
+            # underestimate our probabilities and likely hit an underflow issue
+            for state in self.hidden_states:
+                init[state] /= outer
+                for letter in self.alphabet:
+                    emit[state][letter] /= outer
+                for other_state in self.hidden_states:
+                    trans[state][other_state] /= outer
+
+            # I think this is the Maximization step. However, since all of our probabilities
+            # should just sum to 1 for any given state, this shouldn't have a large impact
+            init_sum = sum(init.values())
+            emit_sum = {state: sum(emit[state].values()) for state in self.hidden_states}
+            trans_sum = {state: sum(trans[state].values()) for state in self.hidden_states}            
+
+            for state in self.hidden_states:
+                init[state] /= init_sum
+                for letter in self.alphabet:
+                    emit[state][letter] /= emit_sum[state]
+                for other_state in self.hidden_states:
+                    trans[state][other_state] /= trans_sum[state]
+            return init, trans, emit
+
+        converged = False
+        count = 0
+
+        while not converged:
+            init, trans, emit = init_bw(pseudocount)
+
+            # This is only used if there are multiple sequences
+            # otherwise, forward-backward would be okay
+            outer = 0 
+
+            for seq in sequences:
+
+                # Send each sequence to processing
+                outer, init, trans, emit = proc_seq(outer, seq, init, trans, emit)
+
+            # Now scale the probability matrices based on sum of observed sequence probabilities
+            init, trans, emit = scale_step(outer, init, trans, emit)
+
+            # Used for convergence checking
+            old = deepcopy(self)
+
+            # Update the model
+            self.init_probs = init
+            self.emit_probs = emit
+            self.trans_probs = trans
+
+            count += 1
+            # Utilize that special HMM.__eq__ method
+            if self == old:
+                converged = True
+                print(f'Converged after {count} iterations')
+
