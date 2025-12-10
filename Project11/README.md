@@ -22,6 +22,8 @@ For each column of the AA_matrix:
     else:
         It is an insertion and add Ii to the list of column classification
 
+Enumerate match columns to define the profile length  and index match states
+
 Return a dictionary of column classifications, indicating if the position is a match or an insertion
 {position: classification} or dict of dict {col_indx: , state: }
 ```
@@ -47,7 +49,7 @@ Define Allowed Transitions:
         rename the gaps in that same column as deletions
 
     #Emission Probabilities
-    For every state M_i:
+    For every state:
         total_count -> number of residues in the column
         residue_frequency -> number of times the specific type of residue we are evaluating appeared in the column
         b <- the pseudocount equal to 1
