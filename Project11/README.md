@@ -2,6 +2,7 @@
 
 # BINF6250 - Project 11: Profile HMM
 # Introduction
+In this project we are builiding off existing HMM code to create the profile HMM. Profile HMM algorith structure is composed of MSA Parsing and Column Classification, Profile HMM Topology Construction,Parameter Estimation from Labeled Columns, and integration.
 
 # Pseudocode
 
@@ -86,16 +87,17 @@ Class ProfileHMM(BaseHMM):
 ```
 
 
-
-
-
 # Successes
+The HTML provided was helpful to get an intial understanding.
 
 # Struggles
 * We struggled to understand the algorithm and implement it into existing hmm file
+* Had trouble calculating the transition probabilites
+* Understanding the correct way to perform execute the algorithm
 
 # Personal Reflections
 ## Group Leader (Allen Benavidez)
+This project has probably been the most difficult for me. Building off of code actually made is hard to predict how the code behaved rather than saving time to work only on profile HMM. The process to create the profile HMM is also confusing and I feel that I initially misunderstood how the process worked for Matching states which derailed me from making some meaningful progress.
 ## Other member (Zoe Chow)
 
 # Generative AI Appendix
