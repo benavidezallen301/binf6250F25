@@ -50,7 +50,7 @@ except ImportError:
 
 # Gil-ify
 np.set_printoptions(precision=2)
-pd.set_option("precision", 2)
+pd.set_option("display.precision", 2)
 
 
 class BaseHMM(object):
@@ -366,7 +366,7 @@ class ProfileHMM(BaseHMM):
         Returns:
             trans_prob (dict of dict): trans prob with placeholders
         """
-        self.trans_probs = {}
+        self.trans_probs = {state: {} for state in self.hidden_states}
 
         # Begin state transitions
         self.trans_probs['Begin'] = {
@@ -483,6 +483,9 @@ class ProfileHMM(BaseHMM):
         aa_total = sum(sum(inner_dict.values()) for inner_dict in emission_counts.values())  # total count within the entire dictionary 
 
         for state, counts in emission_counts.items():
+
+            if state.startswith("D") or state in ("Begin","End"):
+                continue
             total_count = sum(counts.values())  # total count in each state
             self.emit_probs[state] = {}
 
@@ -501,5 +504,46 @@ class ProfileHMM(BaseHMM):
 
         return self.emit_probs
 
-    
+    def estimate_trans_probs(self,msa, column_classification):
+        transition_counts = {}
+
+        for seq in msa:
+            
+            for current_state, next_state in zip(state_path, state_path[1:]):
+                transition_counts[current_state][next_state] += 1
+
     def estimate_trans_probs(self, msa, column_classification):
+
+        transition_counts = {}
+        transition_probs = {}
+
+        for seq in msa:
+            path = self.labeled_path(seq, column_classification)
+
+            state_path = []
+            for state, emission in path:
+                state_path.append(state)
+            
+            for i in range(len(state_path) - 1):
+                current_state = state_path[i]
+                next_state =  state_path[i + 1]
+                transition_counts[current_state][next_state] += 1
+            b = 1
+            states = self.hidden_states
+
+            for s in states:
+                transition_probs[s] = {}
+
+                count = 0
+
+                for next_state in states:
+                    calc = transition_counts[s].get(next_state, 0)
+                    count += (calc + b)
+
+                for next_state in states:
+                    prob_count = transition_counts[s].get(next_state, 0)
+                    prob_calc = (prob_count + b) / count
+                    transition_probs[s][next_state] = prob_calc
+        
+        self.trans_probs = transition_probs
+        return transition_probs 
