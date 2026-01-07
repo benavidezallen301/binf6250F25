@@ -47,10 +47,10 @@ having teams meetings.
 initial struggle was understanding markov models and the expectation for the task. Both of team members are novice coders and it required extra time to have working functions. We also struggled with debugging, accessing the markov model and transforming the data into appropriate data types.
 
 # Personal Reflections
-## Group Leader
+## Group Leader (Allen)
 When first starting the project I quickly realized that this project would be a little different than our previous project. Although we went over Markov Models in class, a lot of it I did not understand. I took some time to research and review what markov models were in order to feel more comfortable tackling this project. I felt a bit better coding in this project compared to the last project since I feel like last week provided a bit of a refresher from BINF 6200. Github was also a bit easier to navigate this time around and I was quick to create the pull request and set up the project.
 
-## Other member
+## Other member (Jason)
 This project presented great challenges in my knowledge and understanding of data structures, rewarding me with a deeper understanding of dictionary manipulation through the concept of Markov models. Although not applied in this project, I deeply appreciate the application of this model type to omics and cannot wait to continue learning about this and other model types to oen day apply it in a relevant setting. I regret not being able to explore numpy more, as I know a true Markov model utilizes matrices to extract the chances of a future state but I did not utilize numpy's array generation and manipulation capabilities.
 
 # Generative AI Appendix
