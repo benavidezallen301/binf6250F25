@@ -69,23 +69,28 @@ def build_markov_model(markov_model, new_text):
     Increment markov_model[word][next_word]
     
     '''
+    # Split up the sentence into a list of words
     new_text = new_text.split(" ")
-    count = 0
-    for word in new_text:
-        if count == 0:
+    # Loop through text
+    for index, word in enumerate(new_text):
+        # Condition to create the starting state
+        if index == 0:
             markov_model["*S*"] = {word : 1}
-        if count ==  len(new_text) - 1:
+        # Condition for when the loop reaches the last word to not get IndexError
+        if inex ==  len(new_text) - 1:
+            # Mark end state.
             markov_model[word].update({"*E*" : 1})
             break
+        # Condition to add to a pre-existing entry
         if word in markov_model:
-            markov_model[word].update({new_text[count+1] : 1})
+            markov_model[word].update({new_text[index+1] : 1})
         else:
-            markov_model[word] = {new_text[count+1] : 1}
-        count += 1
+            # Create new entry
+            markov_model[word] = {new_text[index+1] : 1}
     return markov_model
-    pass
 
 
+# Test the function
 markov_model = dict()
 text = "one fish two fish red fish blue fish"
 markov_model = build_markov_model(markov_model, text)
@@ -116,46 +121,46 @@ def build_markov_model(markov_model, text, order=1):
     markov_model (dict of dicts): an updated/new markov_model
     '''
     new_text = text.split(" ")
-    count = 0
-    
+
+    # Condition for if the Markov model is memory-less, same as previous function
     if order == 1:
-        for word in new_text:
-            if count == 0:
+        for index, word in enumerate(new_text):
+            if index == 0:
                 markov_model["*S*"] = {word : 1}
-            if count ==  len(new_text) - 1:
+            if index ==  len(new_text) - 1:
                 if word not in markov_model:
                     markov_model[word] = {}
                 markov_model[word].update({"*E*" : 1})
                 break
             if word in markov_model:
-                markov_model[word].update({new_text[count+1] : 1})
+                markov_model[word].update({new_text[index+1] : 1})
             else:
-                markov_model[word] = {new_text[count+1] : 1}
-            count += 1
+                markov_model[word] = {new_text[index+1] : 1}
         return markov_model
     
-        
-    for word in new_text:
-        state = " ".join(new_text[count:count + order])
-        if count == 0:
+       
+    for index, word in enumerate(new_text):
+        # State is the "reading frame", joins the requested number of words into one string item
+        state = " ".join(new_text[index:index + order])
+        if index == 0:
             #consulted openAI chatgpt to know how to use the .setdefault() method
             markov_model.setdefault("*S*",{})
             markov_model["*S*"] = {state : 1}
-        if count ==  len(new_text) - order:
+        # Condition to handle IndexError since it accesses words ahead
+        if index ==  len(new_text) - order:
             if state not in markov_model:
                 markov_model[state]={}
                 markov_model[state]["*E*"] = 1
             break
+        # Condition to add to pre-existing entries
         if state in markov_model:
             if new_text[count+order] in markov_model[state]:
-                markov_model[state][new_text[count+order]] += 1
+                markov_model[state][new_text[index+order]] += 1
             else:
-                markov_model[state] = {new_text[count+order]: 1}
+                markov_model[state] = {new_text[index+order]: 1}
         else:
-            markov_model[state] = {new_text[count+order] : 1}
-        count += 1
+            markov_model[state] = {new_text[index+order] : 1}
     return markov_model
-    pass
 
 markov_model = dict()
 text = "one fish two fish red fish blue fish"
@@ -179,8 +184,9 @@ def get_next_word(current_word, markov_model, seed=42):
     and a current state (word)
     
     Args: 
-    current_word (tuple): a word that exists in our model
+    current_word (string): a state that exists in our model
     markov_model (dict of dicts): a dictionary of word:(next_word:frequency pairs)
+    seed (int): dictates how numpy should generate random numbers
     
     Returns:
     next_word (str): a randomly selected next word based on transition probabilies
@@ -190,12 +196,16 @@ def get_next_word(current_word, markov_model, seed=42):
     Randomly draw from these to generate the next state
     
     '''
+    # Access the possible next words given the current state 
     next_states = list(markov_model[current_word])
+    # Creates a list of occurrences for each possible next word
     counts = list(markov_model[current_word].values())
     total = sum(counts)
+    # Counts/sum.
+    # Created lists maintained order, so probabilities should match possible words.
     probabilities = [x/total for x in counts]
+    # Uses numpy's random.choice() to randomly select a word based on the probabilities given.
     return np.random.choice(next_states, replace = False, p = probabilities)
-    pass
 
 
 def generate_random_text(markov_model, seed=42):
@@ -215,18 +225,24 @@ def generate_random_text(markov_model, seed=42):
     Return sentence
     
     '''
+    # First reading-frame to consider, need to convert to list and then join since the entry is a dictionary
     state = " ".join(list(markov_model["*S*"]))
+    # Post-project comment: probably could have made order a function argument
     order = len(state.split(" "))
+    # Split string into list again to make it easy to access select words
     sentence = state.split(" ")
     next_word = get_next_word(state, markov_model)
+    # While loop to keep generating until End is generated
     while next_word != "*E*":
+        # Add next word to the tail of the sentence
         sentence.append(next_word)
+        # Create a new state based off the last N amount of words
         state = " ".join(sentence[-order:])
         next_word = get_next_word(state, markov_model)
+    # Rejoin list into one string
     sentence = " ".join(sentence)
     return sentence
-    pass
- 
+
 markov_model = {}
 text = "one fish two fish red fish blue fish"
 markov_model = build_markov_model(markov_model, text, order = 1)
